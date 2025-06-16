@@ -8,8 +8,8 @@ aiohttp = "*"
 aiohttp-requests = "*"
 bs4 = "*"
 selenium = "*"
-webdriver-manager = "*"
 pyppeteer = "*"
+webdriver-manager = "*"
 
 [dev-packages]
 

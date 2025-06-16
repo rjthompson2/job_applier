@@ -1,5 +1,8 @@
 import aiohttp
 import asyncio
+import requests
+import os
+import pickle
 from bs4 import BeautifulSoup as BS
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -18,6 +21,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+import urllib3
 
 headers = {
     "Accept": "application/vnd.linkedin.normalized+json+2.1",
@@ -59,24 +63,29 @@ class DynamicScraper(ABC):
     def collect(self) -> dict:
         """Collects the data from the webpage"""
         values = {}
-        #TODO log-in
         # soup = BS(self.driver.page_source, features="lxml")
         soup = BS(self.driver.page_source, 'html.parser')
         return soup.findall("a")
 
     def login(self) -> None:
+        try:
+            self.load_cookies()
+            return
+        except Exception as e:
+            print(e)
+            pass
         """Logs in given the information in UserInfo"""
         with open("webcrawler/user_info.txt", "r") as f:
             username = f.readline().replace("\n", "")
             password = f.readline().replace("\n", "")
 
         element = WebDriverWait(self.driver, 2000).until(
-        EC.element_to_be_clickable((By.XPATH, '//*[@id="base-contextual-sign-in-modal"]/div/section/div/div/div/div[2]/button')))
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="base-contextual-sign-in-modal"]/div/section/div/div/div/div[2]/button')))
         element.click()
 
         # Enters the username
         element = WebDriverWait(self.driver, 2000).until(
-        EC.element_to_be_clickable((By.XPATH, '//*[@id="base-sign-in-modal_session_key"]')))
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="base-sign-in-modal_session_key"]')))
         element.send_keys(username)
 
         # Enters the password
@@ -84,7 +93,24 @@ class DynamicScraper(ABC):
         send_password.send_keys(password)
 
         # Login button
-        self.driver.find_element("xpath", '//*[@id="base-sign-in-modal"]/div/section/div/div/form/div[2]/button').click()
+        element = self.driver.find_element("xpath", '//*[@id="base-sign-in-modal"]/div/section/div/div/form/div[2]/button')
+        try:
+            element.click()
+        except urllib3.exceptions.ReadTimeoutError:
+            return
+        self.load_cookies()
+
+    def get_cookies(self):
+        # Save the cookie if applicable
+        with open(os.getcwd()+"/webcrawler/cookies.pkl", 'wb') as filehandler:
+            pickle.dump(self.driver.get_cookies(), filehandler)
+    
+    def load_cookies(self):
+        # Loads the cookies
+        cookies = pickle.load(open(os.getcwd()+"/webcrawler/cookies.pkl", "rb"))
+        for cookie in cookies:
+            self.driver.add_cookie(cookie)
+        self.driver.refresh()
 
     def auto_apply(self, information):
         element = WebDriverWait(self.driver, 2000).until(
@@ -94,38 +120,41 @@ class DynamicScraper(ABC):
 
     def recursive_apply(self, information):
         #TODO need a way to look through all the html and find the specific values
-        print(1)
         try:
+            # input phone number
             self.driver.find_element(By.XPATH, '//input[@class=" artdeco-text-input--input"]').send_keys(information["phone"])
         except Exception as e:
-            print("No question about phone number found", e)
+            try:
+                self.driver.find_element(By.XPATH, '//input[@class="fb-dash-form-element__error-field artdeco-text-input--input"]').send_keys(information["phone"])
+            except Exception as e:
+                print("No question about phone number found")
         try:
-            self.driver.find_element("xpath", '//label[@class="jobs-document-upload__upload-button artdeco-button artdeco-button--secondary artdeco-button--2 mt2"]').click()
-        except:
-            print("No question about resume found")
+            self.driver.find_element(By.XPATH, '//*[@id="ember294"]/div/div[2]/form/div/div/div/div/div/label/span').click()
+        except Exception as e:
+            print("No question about resume found", e)
+
         try:
             self.driver.find_element("xpath", '//input[@id="follow-company-checkbox"]').click()
-        except:
+        except Exception as e:
             print("No checkbox found")
-        
-        # try:
-        #     self.driver.find_element("xpath", '//*[@id="ember220"]').click()
-            # return
-        # except:
-        #     print("No submit button found")
         try:
+            # click sumbit button
             self.driver.find_element("xpath", '//button[@aria-label="Submit application"]').click()
-            return
-        except:
+        except Exception as e:
             print("No submit application button found")
         
         try:
+            # click next step button
             self.driver.find_element("xpath", '//button[@aria-label="Continue to next step"]').click()
-            self.recursive_apply()
-        except:
+            return self.recursive_apply(information)
+        except Exception as e:
             print("No next button found")
         try:
+            # click review button
             self.driver.find_element("xpath", '//button[@aria-label="Review your application"]').click()
-            self.recursive_apply()
-        except:
+            return self.recursive_apply(information)
+        except Exception as e:
             print("No review button found")
+        
+        time.sleep(3)
+        return self.recursive_apply(information)
