@@ -120,6 +120,7 @@ class DynamicScraper(ABC):
 
     def recursive_apply(self, information):
         #TODO need a way to look through all the html and find the specific values
+        #TODO need to remove the try loops
         try:
             # input phone number
             self.driver.find_element(By.XPATH, '//input[@class=" artdeco-text-input--input"]').send_keys(information["phone"])
@@ -129,7 +130,7 @@ class DynamicScraper(ABC):
             except Exception as e:
                 print("No question about phone number found")
         try:
-            self.driver.find_element(By.XPATH, '//*[@id="ember294"]/div/div[2]/form/div/div/div/div/div/label/span').click()
+            self.driver.find_element(By.XPATH, "//input[@type='file' and contains(@name, 'file')]").send_keys(os.getcwd()+"/users/resumes/"+information["resume_name"])
         except Exception as e:
             print("No question about resume found", e)
 
