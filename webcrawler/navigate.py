@@ -125,7 +125,7 @@ class DynamicScraper(ABC):
         resume = self.driver.find_elements(By.XPATH, "//input[@type='file' and contains(@name, 'file')]")
         check_box = self.driver.find_elements(By.XPATH, '//label[@for="follow-company-checkbox"]')
         title = self.driver.find_elements(By.XPATH, '//h3')
-        print(title, phone_number, resume, check_box)
+        print(title.text, phone_number, resume, check_box)
 
         if len(phone_number) > 0:
             phone_number[0].send_keys(information["phone"])
@@ -135,6 +135,8 @@ class DynamicScraper(ABC):
             check_box[0].click()
         if title[0].text.lower() == 'work authorization':
             self.work_auth()
+        if title[0].text.lower() == 'additional questions':
+            self.additional()
 
         # Clicks to the next slide
         submit = self.driver.find_elements(By.XPATH, '//button[@aria-label="Submit application"]')
@@ -169,4 +171,20 @@ class DynamicScraper(ABC):
                 answer[current].click()
             else:
                 print(question.text)
+            current += 1
+    
+
+    def additional():
+        current = 0
+        questions = self.driver.find_elements(By.XPATH, '//span[@class="visually-hidden"]')
+
+        for question in questions:
+            if question.text.contains("onsite"):
+                answer = self.driver.find_elements(By.XPATH, '//label[@data-test-text-selectable-option__label="Yes"]')
+                answer[current].click()
+            elif question.text.contains("commuting"):
+                answer = self.driver.find_elements(By.XPATH, '//label[@data-test-text-selectable-option__label="Yes"]')
+                answer[current].click()
+            else:
+                print("NEW QUESTIONS:", question.text)
             current += 1
