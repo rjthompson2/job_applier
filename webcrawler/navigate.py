@@ -119,9 +119,13 @@ class DynamicScraper(ABC):
         self.recursive_apply(information)
 
     def recursive_apply(self, information):
+        #TODO a way to handle additional questions
+        # Things to fill out before clicking to the next slide
         phone_number = self.driver.find_elements(By.XPATH, '//input[@class=" artdeco-text-input--input"]')
         resume = self.driver.find_elements(By.XPATH, "//input[@type='file' and contains(@name, 'file')]")
-        check_box = self.driver.find_elements(By.XPATH, '//input[@id="follow-company-checkbox"]')
+        check_box = self.driver.find_elements(By.XPATH, '//label[@for="follow-company-checkbox"]')
+        title = self.driver.find_elements(By.XPATH, '//h3')
+        print(title, phone_number, resume, check_box)
 
         if len(phone_number) > 0:
             phone_number[0].send_keys(information["phone"])
@@ -129,14 +133,18 @@ class DynamicScraper(ABC):
             resume[0].send_keys(os.getcwd()+"/users/resumes/"+information["resume_name"])
         if len(check_box) > 0:
             check_box[0].click()
+        if title[0].text.lower() == 'work authorization':
+            self.work_auth()
 
-
+        # Clicks to the next slide
         submit = self.driver.find_elements(By.XPATH, '//button[@aria-label="Submit application"]')
         next_button = self.driver.find_elements(By.XPATH, '//button[@aria-label="Continue to next step"]')
         review = self.driver.find_elements(By.XPATH, '//button[@aria-label="Review your application"]')
+        print(submit, next_button, review)
         
         if len(submit) > 0:
             submit[0].click()
+            # return
         if len(next_button) > 0:
             # click next step button
             next_button[0].click()
@@ -147,3 +155,18 @@ class DynamicScraper(ABC):
             return self.recursive_apply(information)
         time.sleep(3)
         return self.recursive_apply(information)
+    
+    def work_auth():
+        current = 0
+        questions = self.driver.find_elements(By.XPATH, '//span[@class="visually-hidden"]')
+
+        for question in questions:
+            if question.text.contains("require"):
+                answer = self.driver.find_elements(By.XPATH, '//label[@data-test-text-selectable-option__label="No"]')
+                answer[current].click()
+            elif question.text.contains("citizen"):
+                answer = self.driver.find_elements(By.XPATH, '//label[@data-test-text-selectable-option__label="Yes"]')
+                answer[current].click()
+            else:
+                print(question.text)
+            current += 1
