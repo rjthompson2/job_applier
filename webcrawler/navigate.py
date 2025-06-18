@@ -119,43 +119,31 @@ class DynamicScraper(ABC):
         self.recursive_apply(information)
 
     def recursive_apply(self, information):
-        #TODO need a way to look through all the html and find the specific values
-        #TODO need to remove the try loops
-        try:
-            # input phone number
-            self.driver.find_element(By.XPATH, '//input[@class=" artdeco-text-input--input"]').send_keys(information["phone"])
-        except Exception as e:
-            try:
-                self.driver.find_element(By.XPATH, '//input[@class="fb-dash-form-element__error-field artdeco-text-input--input"]').send_keys(information["phone"])
-            except Exception as e:
-                print("No question about phone number found")
-        try:
-            self.driver.find_element(By.XPATH, "//input[@type='file' and contains(@name, 'file')]").send_keys(os.getcwd()+"/users/resumes/"+information["resume_name"])
-        except Exception as e:
-            print("No question about resume found", e)
+        phone_number = self.driver.find_elements(By.XPATH, '//input[@class=" artdeco-text-input--input"]')
+        resume = self.driver.find_elements(By.XPATH, "//input[@type='file' and contains(@name, 'file')]")
+        check_box = self.driver.find_elements(By.XPATH, '//input[@id="follow-company-checkbox"]')
 
-        try:
-            self.driver.find_element("xpath", '//input[@id="follow-company-checkbox"]').click()
-        except Exception as e:
-            print("No checkbox found")
-        try:
-            # click sumbit button
-            self.driver.find_element("xpath", '//button[@aria-label="Submit application"]').click()
-        except Exception as e:
-            print("No submit application button found")
+        if len(phone_number) > 0:
+            phone_number[0].send_keys(information["phone"])
+        if len(resume) > 0:
+            resume[0].send_keys(os.getcwd()+"/users/resumes/"+information["resume_name"])
+        if len(check_box) > 0:
+            check_box[0].click()
+
+
+        submit = self.driver.find_elements(By.XPATH, '//button[@aria-label="Submit application"]')
+        next_button = self.driver.find_elements(By.XPATH, '//button[@aria-label="Continue to next step"]')
+        review = self.driver.find_elements(By.XPATH, '//button[@aria-label="Review your application"]')
         
-        try:
+        if len(submit) > 0:
+            submit[0].click()
+        if len(next_button) > 0:
             # click next step button
-            self.driver.find_element("xpath", '//button[@aria-label="Continue to next step"]').click()
+            next_button[0].click()
             return self.recursive_apply(information)
-        except Exception as e:
-            print("No next button found")
-        try:
+        if len(review) > 0:
             # click review button
-            self.driver.find_element("xpath", '//button[@aria-label="Review your application"]').click()
+            review[0].click()
             return self.recursive_apply(information)
-        except Exception as e:
-            print("No review button found")
-        
         time.sleep(3)
         return self.recursive_apply(information)
