@@ -22,6 +22,11 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 import time
 import urllib3
+import socket
+import datetime
+import platform
+import re
+from PyPDF2 import PdfReader
 
 headers = {
     "Accept": "application/vnd.linkedin.normalized+json+2.1",
@@ -39,11 +44,12 @@ headers = {
     "x-li-track": '{"clientVersion":"1.13.11889","mpVersion":"1.13.11889","osName":"web","timezoneOffset":-8,"timezone":"America/Los_Angeles","deviceFormFactor":"DESKTOP","mpName":"voyager-web","displayDensity":2,"displayWidth":2880,"displayHeight":1800}'
 }
 
+
 class DynamicScraper(ABC):
     """Generalized scraper for dynamic webpages"""
     driver = None
 
-    def start(self, headless=False, debug=False):
+    def start(self, headless=False, debug=False, mask=False):
         """Opens a chrome browser and connects to the url"""
         opts = Options()
         if headless:
@@ -51,6 +57,9 @@ class DynamicScraper(ABC):
         opts.add_argument("−−incognito")
         if debug:
             opts.add_experimental_option("detach", True)
+        if mask:
+            # fork_mask()
+            opts.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
         self.driver = webdriver.Chrome(
             options=opts,
             service=Service(ChromeDriverManager().install()),
@@ -66,6 +75,31 @@ class DynamicScraper(ABC):
         # soup = BS(self.driver.page_source, features="lxml")
         soup = BS(self.driver.page_source, 'html.parser')
         return soup.findall("a")
+
+    def get_cookies(self, name=""):
+        # Save the cookie if applicable
+        with open(os.getcwd()+"/webcrawler/pickles/"+name+"cookies.pkl", 'wb') as filehandler:
+            pickle.dump(self.driver.get_cookies(), filehandler)
+    
+    def load_cookies(self, name=""):
+        # Loads the cookies
+        cookies = pickle.load(open(os.getcwd()+"/webcrawler/pickles/"+name+"cookies.pkl", "rb"))
+        for cookie in cookies:
+            try:
+                self.driver.add_cookie(cookie)
+            except Exception as e:
+                print("Unable to store cookie:", cookie)
+                print(e)
+        self.driver.refresh()
+
+
+class LinkedInBot(DynamicScraper):
+    def __init__(self):
+        self.genie = GPTBot()
+        self.genie.start(mask=True)
+        self.genie.connect("https://chatgpt.com/")
+        self.genie.login()
+
 
     def login(self) -> None:
         try:
@@ -98,34 +132,43 @@ class DynamicScraper(ABC):
             element.click()
         except urllib3.exceptions.ReadTimeoutError:
             return
-        self.load_cookies()
-
-    def get_cookies(self):
-        # Save the cookie if applicable
-        with open(os.getcwd()+"/webcrawler/cookies.pkl", 'wb') as filehandler:
-            pickle.dump(self.driver.get_cookies(), filehandler)
-    
-    def load_cookies(self):
-        # Loads the cookies
-        cookies = pickle.load(open(os.getcwd()+"/webcrawler/cookies.pkl", "rb"))
-        for cookie in cookies:
-            self.driver.add_cookie(cookie)
-        self.driver.refresh()
+        self.get_cookies()
 
     def auto_apply(self, information):
-        element = WebDriverWait(self.driver, 2000).until(
-        EC.element_to_be_clickable((By.ID, 'jobs-apply-button-id')))
-        element.click()
-        self.recursive_apply(information)
+        #Get a list of all job applications
+        applications_list = WebDriverWait(self.driver, 2000).until(
+            EC.presence_of_all_elements_located((By.XPATH, '//a[@dir="ltr" and contains(@class, "job-card-container__link")]')))
+        applications = self.driver.find_elements(By.XPATH, '//a[@dir="ltr" and contains(@class, "job-card-container__link")]')
+
+        for i, application in enumerate(applications):
+            try:
+                print(f"Clicking job {i + 1}/{len(applications)}")
+                self.driver.execute_script("arguments[0].scrollIntoView();", application)
+                application.click()
+                
+                #Starts the application process
+                easy_apply = WebDriverWait(self.driver, 2000).until(
+                    EC.element_to_be_clickable((By.ID, 'jobs-apply-button-id')))
+                easy_apply.click()
+                self.recursive_apply(information)
+                done = WebDriverWait(self.driver, 2000).until(
+                    EC.element_to_be_clickable((By.XPATH, '//span[@class="artdeco-button__text"]')))
+                done.click()
+                time.sleep(2)
+
+            except Exception as e:
+                print(f"Error on job {i + 1}: {e}")
+                #TODO potentially save the html for future testing?
+                #TODO need to click out of job and click discard
+                continue
 
     def recursive_apply(self, information):
-        #TODO a way to handle additional questions
         # Things to fill out before clicking to the next slide
-        phone_number = self.driver.find_elements(By.XPATH, '//input[@class=" artdeco-text-input--input"]')
+        phone_number = self.driver.find_elements(By.XPATH, '//input[@class=" artdeco-text-input--input" and contains(@id, "phoneNumber")]') 
         resume = self.driver.find_elements(By.XPATH, "//input[@type='file' and contains(@name, 'file')]")
         check_box = self.driver.find_elements(By.XPATH, '//label[@for="follow-company-checkbox"]')
         title = self.driver.find_elements(By.XPATH, '//h3')
-        print(title.text, phone_number, resume, check_box)
+        # print(title[0].text, phone_number, resume, check_box)
 
         if len(phone_number) > 0:
             phone_number[0].send_keys(information["phone"])
@@ -142,11 +185,11 @@ class DynamicScraper(ABC):
         submit = self.driver.find_elements(By.XPATH, '//button[@aria-label="Submit application"]')
         next_button = self.driver.find_elements(By.XPATH, '//button[@aria-label="Continue to next step"]')
         review = self.driver.find_elements(By.XPATH, '//button[@aria-label="Review your application"]')
-        print(submit, next_button, review)
+        # print(submit, next_button, review)
         
         if len(submit) > 0:
             submit[0].click()
-            # return
+            return
         if len(next_button) > 0:
             # click next step button
             next_button[0].click()
@@ -158,33 +201,125 @@ class DynamicScraper(ABC):
         time.sleep(3)
         return self.recursive_apply(information)
     
-    def work_auth():
+    def work_auth(self):
         current = 0
         questions = self.driver.find_elements(By.XPATH, '//span[@class="visually-hidden"]')
 
         for question in questions:
-            if question.text.contains("require"):
+            check = True
+            if "require" in question.text:
                 answer = self.driver.find_elements(By.XPATH, '//label[@data-test-text-selectable-option__label="No"]')
                 answer[current].click()
-            elif question.text.contains("citizen"):
+                check = False
+            if "citizen" in question.text or "authorized to work" in question.text:
                 answer = self.driver.find_elements(By.XPATH, '//label[@data-test-text-selectable-option__label="Yes"]')
                 answer[current].click()
-            else:
+                check = False
+            if check and question.text != "":
                 print(question.text)
             current += 1
     
 
-    def additional():
+    def additional(self):
         current = 0
-        questions = self.driver.find_elements(By.XPATH, '//span[@class="visually-hidden"]')
+        click_questions = self.driver.find_elements(By.XPATH, '//span[@aria-hidden="true"]')
+        answer_questions = self.driver.find_elements(By.XPATH, '//label[@class="artdeco-text-input--label"]')
 
-        for question in questions:
-            if question.text.contains("onsite"):
+        for question in click_questions:
+            check = True
+            if "onsite" in question.text or "commuting" in question.text or "Bachelor's" in question.text or "office" in question.text or "following license or certification: Software Engineer" in question.text or "drug test" in question.text  or "background check" in question.text  or "hybrid" in question.text:
                 answer = self.driver.find_elements(By.XPATH, '//label[@data-test-text-selectable-option__label="Yes"]')
                 answer[current].click()
-            elif question.text.contains("commuting"):
-                answer = self.driver.find_elements(By.XPATH, '//label[@data-test-text-selectable-option__label="Yes"]')
-                answer[current].click()
-            else:
-                print("NEW QUESTIONS:", question.text)
+                check = False
+            if check and question.text != "":
+                print(question.text)
             current += 1
+
+        current = 0
+        for question in answer_questions:
+            check = True
+            if "years of" in question.text:
+                prompt = """
+                    For your answer I want it you to put brackets [] around your final answer. Here is my resume: {resume} From the resume, answer the following response double checking that you've only included work experience. Give the answer as a singular digit: {question} 
+
+                """
+                resume_str = extract_text_pdf(os.getcwd()+"/users/resumes/"+information["resume_name"])
+                prompt = prompt.format(resume=resume_str, question=question.text)
+                self.genie.ask(prompt)
+                response = self.genie.collect_response()
+                answer = "0"
+                for r in response:
+                    if '[' in r.text:
+                        answer = re.findall("(?!\[)[0-9]+(?<!\])", r.text)[-1]
+                print("Current and answer:", current, answer)
+                answer_box = self.driver.find_elements(By.XPATH, '//input[@class=" artdeco-text-input--input"]') 
+                answer_box[current].send_keys(answer)
+                check = False
+            if check and question.text != "":
+                print("Could not find additional question:", question.text)
+            current += 1
+
+    def close(self):
+        self.genie.driver.close()
+        self.driver.close()
+
+
+
+class GPTBot(DynamicScraper):
+    def login(self) -> None:
+        try:
+            self.load_cookies("gpt")
+            return
+        except Exception as e:
+            print(e)
+            pass
+        """Logs in given the information in UserInfo"""
+        input("Press ENTER after you have logged in")
+        self.get_cookies("gpt")
+
+
+
+    def collect_response(self) -> dict:
+        """Collects the response from the webpage"""
+        return self.driver.find_elements(By.XPATH, '//*[@data-start]')
+    
+    def ask(self, prompt) -> None:
+        """Asks ChatGPT a question"""
+        time.sleep(3)
+        ask = WebDriverWait(self.driver, 2000).until(
+            EC.element_to_be_clickable((By.XPATH, '//div[@id="prompt-textarea"]')))
+        ask.send_keys(prompt)
+
+        time.sleep(3)
+        button = WebDriverWait(self.driver, 2000).until(
+            EC.element_to_be_clickable((By.XPATH, '//*[@id="composer-submit-button"]')))
+        button.click()
+        
+    
+
+    def extract_text_pdf(pdf_file_path):
+        try:
+            # Open the PDF file in binary read mode
+            with open(pdf_file_path, 'rb') as file:
+                # Create a PdfReader object
+                pdf_reader = PdfReader(file)
+
+                # Get document information (metadata)
+                doc_info = pdf_reader.metadata
+
+                # Extract text from all pages
+                text = ""
+                for page_num in range(len(pdf_reader.pages)):
+                    page = pdf_reader.pages[page_num]
+                    text += page.extract_text()
+
+                return text
+
+        except FileNotFoundError:
+            print(f"Error: File not found at {pdf_file_path}")
+            return None
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return None
+
+

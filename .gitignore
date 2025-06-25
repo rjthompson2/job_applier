@@ -180,3 +180,7 @@ webcrawler/cookies.json
 ai/
 sandbox.py
 test.*
+pickles
+webcrawler/utilities.py
+~/chrome-data/*
+~/*

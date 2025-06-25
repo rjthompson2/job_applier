@@ -10,6 +10,8 @@ bs4 = "*"
 selenium = "*"
 pyppeteer = "*"
 webdriver-manager = "*"
+openai = "*"
+pypdf2 = "*"
 
 [dev-packages]
 
