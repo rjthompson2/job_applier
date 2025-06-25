@@ -183,4 +183,4 @@ test.*
 pickles
 webcrawler/utilities.py
 ~/chrome-data/*
-~/*
+~
