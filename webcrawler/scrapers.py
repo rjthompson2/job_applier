@@ -45,6 +45,31 @@ headers = {
 }
 
 
+def extract_text_pdf(pdf_file_path):
+    try:
+        # Open the PDF file in binary read mode
+        with open(pdf_file_path, 'rb') as file:
+            # Create a PdfReader object
+            pdf_reader = PdfReader(file)
+
+            # Get document information (metadata)
+            doc_info = pdf_reader.metadata
+
+            # Extract text from all pages
+            text = ""
+            for page_num in range(len(pdf_reader.pages)):
+                page = pdf_reader.pages[page_num]
+                text += page.extract_text()
+
+            return text
+    except FileNotFoundError:
+        print(f"Error: File not found at {pdf_file_path}")
+        return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+
 class DynamicScraper(ABC):
     """Generalized scraper for dynamic webpages"""
     driver = None
@@ -159,8 +184,15 @@ class LinkedInBot(DynamicScraper):
             except Exception as e:
                 print(f"Error on job {i + 1}: {e}")
                 #TODO potentially save the html for future testing?
-                #TODO need to click out of job and click discard
-                continue
+                print("quitting...")
+                exit_out = self.driver.find_elements(By.XPATH, '//button[@aria-label="Dismiss"]')[0]
+                exit_out.click()
+                print("discarding...")
+
+                discard = WebDriverWait(self.driver, 2000).until(
+                    EC.element_to_be_clickable((By.XPATH, '//span[text()="Discard"]')))
+                discard.click()
+                print("done!")
 
     def recursive_apply(self, information):
         # Things to fill out before clicking to the next slide
@@ -259,6 +291,9 @@ class LinkedInBot(DynamicScraper):
                 print("Could not find additional question:", question.text)
             current += 1
 
+    def set_genie(self, genie):
+        self.genie = genie
+
     def close(self):
         self.genie.driver.close()
         self.driver.close()
@@ -294,32 +329,6 @@ class GPTBot(DynamicScraper):
         button = WebDriverWait(self.driver, 2000).until(
             EC.element_to_be_clickable((By.XPATH, '//*[@id="composer-submit-button"]')))
         button.click()
-        
-    
 
-    def extract_text_pdf(pdf_file_path):
-        try:
-            # Open the PDF file in binary read mode
-            with open(pdf_file_path, 'rb') as file:
-                # Create a PdfReader object
-                pdf_reader = PdfReader(file)
-
-                # Get document information (metadata)
-                doc_info = pdf_reader.metadata
-
-                # Extract text from all pages
-                text = ""
-                for page_num in range(len(pdf_reader.pages)):
-                    page = pdf_reader.pages[page_num]
-                    text += page.extract_text()
-
-                return text
-
-        except FileNotFoundError:
-            print(f"Error: File not found at {pdf_file_path}")
-            return None
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            return None
 
 
