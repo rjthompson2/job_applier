@@ -12,6 +12,9 @@ pyppeteer = "*"
 webdriver-manager = "*"
 openai = "*"
 pypdf2 = "*"
+selenium-stealth = "*"
+undetected-chromedriver = "*"
+fake-useragent = "*"
 
 [dev-packages]
 

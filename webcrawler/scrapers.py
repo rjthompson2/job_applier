@@ -27,6 +27,9 @@ import datetime
 import platform
 import re
 from PyPDF2 import PdfReader
+from selenium_stealth import stealth
+import undetected_chromedriver as uc
+from fake_useragent import UserAgent
 
 headers = {
     "Accept": "application/vnd.linkedin.normalized+json+2.1",
@@ -301,6 +304,30 @@ class LinkedInBot(DynamicScraper):
 
 
 class GPTBot(DynamicScraper):
+    def start(self, mask=True):
+        """Opens a chrome browser and connects to the url"""
+        user_agent = UserAgent().random
+        chrome_options = uc.ChromeOptions()
+        chrome_options.add_argument("user-agent={}".format(user_agent))
+        self.driver = uc.Chrome(
+            # options=chrome_options,
+            service=Service(ChromeDriverManager().install()),
+        )
+        
+        # Disable WebDriver flag
+        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        # Execute Cloudflare's challenge script
+        self.driver.execute_script("return navigator.language")
+
+        stealth(self.driver,
+                languages=["en-US", "en"],
+                vendor="Google Inc.",
+                platform="Win32",
+                webgl_vendor="Intel Inc.",
+                renderer="Intel Iris OpenGL Engine",
+                fix_hairline=True
+        )
+        
     def login(self) -> None:
         try:
             self.load_cookies("gpt")
@@ -311,8 +338,6 @@ class GPTBot(DynamicScraper):
         """Logs in given the information in UserInfo"""
         input("Press ENTER after you have logged in")
         self.get_cookies("gpt")
-
-
 
     def collect_response(self) -> dict:
         """Collects the response from the webpage"""
